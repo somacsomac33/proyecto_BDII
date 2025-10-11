@@ -30,27 +30,27 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 
 ## Entidades Principales
 
-### 📍 **Tiendas**
+### **Tiendas**
 - **Propósito**: Representa las ubicaciones físicas de venta
 - **Campos clave**: `id_tienda` (PK), `nombre`, `direccion`, `ciudad`
 - **Rol**: Entidad central que agrupa empleados, inventario y transacciones
 
-### 👥 **Empleados y Puestos**
+### **Empleados y Puestos**
 - **Empleados**: Personal que opera en las tiendas
 - **Puesto_Empleados**: Catálogo de roles (Vendedor, Cajero, Gerente, etc.)
 - **Relación**: Cada empleado tiene un puesto asignado y trabaja en una tienda específica
 
-### 🛍️ **Productos y Categorías**
+### **Productos y Categorías**
 - **Productos**: Catálogo maestro de artículos comercializables
 - **Categoria_Productos**: Clasificación organizacional de productos
 - **Características**: SKU único, precios de venta y costo, descripción detallada
 
-### 🏢 **Proveedores**
+### **Proveedores**
 - **Propósito**: Entidades que suministran productos
 - **Datos**: Información de contacto, razón social, detalles comerciales
 - **Relación**: Vinculados a productos para trazabilidad de origen
 
-### 👤 **Clientes**
+### **Clientes**
 - **Propósito**: Registro de compradores para ventas y facturación
 - **Campos**: Datos personales, RFC (opcional), información de contacto
 - **Flexibilidad**: Soporte para ventas anónimas (cliente NULL)
@@ -59,7 +59,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 
 ## Diseño Detallado de Tablas
 
-### 📍 **tiendas**
+### **tiendas**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_tienda` | SERIAL (PK) | Identificador único de la tienda |
@@ -70,7 +70,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 👥 **puesto_empleados**
+### **puesto_empleados**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_puesto` | SERIAL (PK) | Identificador del puesto |
@@ -78,7 +78,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 👨‍💼 **empleados**
+### **empleados**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_empleado` | SERIAL (PK) | Identificador único del empleado |
@@ -92,7 +92,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 🏢 **proveedores**
+### **proveedores**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_proveedor` | SERIAL (PK) | Identificador único del proveedor |
@@ -103,7 +103,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 🏷️ **categoria_productos**
+### **categoria_productos**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_categoria` | SERIAL (PK) | Identificador único de la categoría |
@@ -112,7 +112,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 📦 **productos**
+### **productos**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_producto` | SERIAL (PK) | Identificador único del producto |
@@ -126,7 +126,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 📊 **inventario**
+### **inventario**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_tienda` | INTEGER (PK, FK) | Tienda → `tiendas(id_tienda)` |
@@ -137,7 +137,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 
 **Nota**: Clave primaria compuesta `(id_tienda, id_producto)`
 
-### 👤 **clientes**
+### **clientes**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_cliente` | SERIAL (PK) | Identificador único del cliente |
@@ -148,7 +148,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 🛒 **venta**
+### **venta**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_venta` | SERIAL (PK) | Identificador único de la venta |
@@ -160,7 +160,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 🛍️ **detalles_venta**
+### **detalles_venta**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_detalle_venta` | SERIAL (PK) | Identificador único del detalle |
@@ -172,7 +172,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 🧾 **facturacion**
+### **facturacion**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_factura` | SERIAL (PK) | Identificador único de la factura |
@@ -188,7 +188,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 📋 **compra**
+### **compra**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_compra` | SERIAL (PK) | Identificador único de la compra |
@@ -203,7 +203,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 | `created_at` | TIMESTAMP | Fecha de registro |
 | `updated_at` | TIMESTAMP | Última modificación |
 
-### 📦 **compra_producto**
+### **compra_producto**
 | Campo | Tipo | Descripción |
 |---|---|---|
 | `id_compra_producto` | SERIAL (PK) | Identificador único del detalle |
@@ -219,7 +219,7 @@ El modelo de datos está diseñado para gestionar un sistema completo de ventas 
 
 ## Organización por Módulos
 
-### 🛒 **Módulo de Ventas**
+### **Módulo de Ventas**
 ```
 Venta (cabecera)
 ├── Detalles_Venta (líneas de productos)
@@ -232,7 +232,7 @@ Venta (cabecera)
 - Vinculación opcional a cliente y empleado
 - Facturación posterior a la venta
 
-### 📦 **Módulo de Compras**
+### **Módulo de Compras**
 ```
 Compra (orden de compra)
 ├── CompraProducto (líneas de productos)
@@ -245,7 +245,7 @@ Compra (orden de compra)
 - Aplicación automática al inventario al confirmar recepción
 - Estados: pendiente, recibida, aplicada
 
-### 📊 **Módulo de Inventario**
+### **Módulo de Inventario**
 ```
 Inventario (stock por tienda-producto)
 ├── Entrada: CompraProducto (al recibir)
