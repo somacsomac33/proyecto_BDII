@@ -2,7 +2,7 @@
 
 # Base de Datos para Sistema de Ventas (PostgreSQL)
 
-Este repositorio contiene el script DDL (Data Definition Language) para crear la estructura completa de una base de datos en PostgreSQL, diseñada para un sistema de ventas, compras e inventario. El modelo está optimizado para la escalabilidad, la integridad de los datos y la automatización de la lógica de negocio.
+El modelo está optimizado para la escalabilidad, la integridad de los datos y la automatización de la lógica de negocio.
 
 ## Índice
 
