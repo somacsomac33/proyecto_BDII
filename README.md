@@ -374,7 +374,6 @@ Inventario (stock por tienda-producto)
 Para visualizar este modelo:
 1. **Diagrama ER completo**: `diagrams/modelo_logico.puml` (PlantUML)
 2. **Documentación detallada**: `docs/tablas_modelo_logico.md`
-3. **Script DDL**: `sql/modelo_logico.sql`
 
 ---
 
