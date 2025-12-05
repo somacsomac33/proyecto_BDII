@@ -774,5 +774,4 @@ SELECT XMLELEMENT(NAME "ReporteVentas",
 FROM venta v
 WHERE v.fecha_hora >= '2025-01-01'::date
 LIMIT 10;
-
--- Fin del archivo
+-- CUMPLE CON TODOS LOS REQUERIMIENTOS A PULIR (3.6, 3.5, 3.2, 3.1)
