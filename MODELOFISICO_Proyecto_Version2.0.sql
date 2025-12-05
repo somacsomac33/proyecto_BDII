@@ -1,9 +1,11 @@
--- Modelo FISICO: Sistema de Ventas 
+-- ======================================================================
+-- Modelo FISICO: Sistema de Ventas (original + datamart + backup/replica)
 -- PostgreSQL 13+
+-- ======================================================================
 
 DROP DATABASE IF EXISTS sistema_ventas;
 CREATE DATABASE sistema_ventas;
-\c sistema_ventas; 
+\c sistema_ventas;
 
 --- 1. TABLAS INDEPENDIENTES (Catálogos Base) ---
 
@@ -202,6 +204,18 @@ CREATE TABLE facturacion (
     id_cliente INTEGER REFERENCES clientes(id_cliente) ON DELETE CASCADE
 ) PARTITION BY RANGE (fecha_emision);
 
+CREATE TABLE fact_ventas (
+    id_fact SERIAL PRIMARY KEY,
+    fecha_dim_key INTEGER,
+    producto_key INTEGER,
+    cliente_key INTEGER,
+    tienda_key INTEGER,
+    cantidad INTEGER,
+    total NUMERIC(14,2),
+    created_at TIMESTAMPTZ DEFAULT now()
+);
+
+
 --- 6. PARTICIONES ---
 
 -- 2025
@@ -237,6 +251,10 @@ CREATE INDEX idx_venta_tienda ON venta(id_tienda);
 CREATE INDEX idx_detalles_venta_venta ON detalles_venta(id_venta);
 CREATE INDEX idx_facturacion_venta ON facturacion(id_venta);
 
+CREATE INDEX IF NOT EXISTS idx_fact_fecha ON fact_ventas(fecha_dim_key);
+CREATE INDEX IF NOT EXISTS idx_fact_producto ON fact_ventas(producto_key);
+CREATE INDEX IF NOT EXISTS idx_fact_cliente ON fact_ventas(cliente_key);
+CREATE INDEX IF NOT EXISTS idx_fact_tienda ON fact_ventas(tienda_key);
 CREATE INDEX IF NOT EXISTS idx_detalles_venta_venta_orden ON detalles_venta(id_venta, orden);
 CREATE INDEX IF NOT EXISTS idx_compra_producto_compra_orden ON compra_producto(id_compra, orden);
 
@@ -276,13 +294,13 @@ BEGIN
     IF (TG_OP = 'DELETE') THEN
         PERFORM 1; 
         UPDATE venta
-            SET monto_total = COALESCE((SELECT SUM(subtotal) FROM detalles_venta WHERE id_venta = OLD.id_venta), 0),
+            SET total_venta = COALESCE((SELECT SUM(subtotal) FROM detalles_venta WHERE id_venta = OLD.id_venta), 0),
                 updated_at = now()
             WHERE id_venta = OLD.id_venta;
         RETURN OLD;
     ELSE
         UPDATE venta
-            SET monto_total = COALESCE((SELECT SUM(subtotal) FROM detalles_venta WHERE id_venta = NEW.id_venta), 0),
+            SET total_venta = COALESCE((SELECT SUM(subtotal) FROM detalles_venta WHERE id_venta = NEW.id_venta), 0),
                 updated_at = now()
             WHERE id_venta = NEW.id_venta;
         RETURN NEW;
@@ -451,5 +469,310 @@ CREATE TRIGGER trg_compra_producto_after_ins_upd AFTER INSERT OR UPDATE ON compr
 CREATE TRIGGER trg_compra_producto_after_del AFTER DELETE ON compra_producto FOR EACH ROW EXECUTE FUNCTION trg_recalc_compra_total();
 CREATE TRIGGER trg_compra_producto_after_ins_upd_inventory AFTER INSERT OR UPDATE ON compra_producto FOR EACH ROW EXECUTE FUNCTION trg_apply_compra_producto_to_inventario();
 CREATE TRIGGER trg_compra_after_update_recibida AFTER UPDATE ON compra FOR EACH ROW EXECUTE FUNCTION trg_compra_after_update_recibida();
+
+-- Dimensión tiempo (dm_dim_tiempo)
+DROP TABLE IF EXISTS dm_dim_tiempo CASCADE;
+
+CREATE TABLE dm_dim_tiempo AS
+SELECT
+    fecha::date AS fecha,
+    EXTRACT(YEAR FROM fecha)::int AS anio,
+    EXTRACT(MONTH FROM fecha)::int AS mes,
+    EXTRACT(QUARTER FROM fecha)::int AS trimestre,
+    TO_CHAR(fecha, 'Day')::text AS dia_semana
+FROM (
+    SELECT DISTINCT date_trunc('day', fecha_hora)::date AS fecha
+    FROM venta
+) AS t;
+
+ALTER TABLE dm_dim_tiempo
+ADD PRIMARY KEY (fecha);
+
+-- Dimensión producto (dm_dim_producto)
+DROP TABLE IF EXISTS dm_dim_producto;
+CREATE TABLE dm_dim_producto AS
+SELECT sku AS producto_key, nombre_producto, id_categoria
+FROM productos;
+
+ALTER TABLE dm_dim_producto
+ADD PRIMARY KEY (producto_key);
+
+-- Dimensión cliente (dm_dim_cliente)
+DROP TABLE IF EXISTS dm_dim_cliente;
+CREATE TABLE dm_dim_cliente AS
+SELECT id_cliente AS cliente_key, razon_social, rfc, email
+FROM clientes;
+
+ALTER TABLE dm_dim_cliente
+ADD PRIMARY KEY (cliente_key);
+
+-- Dimensión tienda (dm_dim_tienda)
+DROP TABLE IF EXISTS dm_dim_tienda;
+CREATE TABLE dm_dim_tienda AS
+SELECT id_tienda AS tienda_key, nombre, ciudad
+FROM sucursal;
+
+ALTER TABLE dm_dim_tienda
+ADD PRIMARY KEY (tienda_key);
+
+-- Dimensión empleado (dm_dim_empleado)
+DROP TABLE IF EXISTS dm_dim_empleado;
+CREATE TABLE dm_dim_empleado AS
+SELECT id_empleado AS empleado_key,
+       nombre || ' ' || COALESCE(apellido_paterno,'') || ' ' || COALESCE(apellido_materno,'') AS nombre_completo,
+       id_tienda, id_puesto
+FROM empleados;
+
+ALTER TABLE dm_dim_empleado
+ADD PRIMARY KEY (empleado_key);
+
+CREATE INDEX idx_fact_ventas_fecha ON fact_ventas(fecha_dim_key);
+CREATE INDEX idx_fact_ventas_tienda ON fact_ventas(tienda_key);
+CREATE INDEX idx_fact_ventas_producto ON fact_ventas(producto_key);
+CREATE INDEX idx_fact_ventas_cliente ON fact_ventas(cliente_key);
+
+-- Materialized view para reporting (ventas diarias por tienda)
+DROP MATERIALIZED VIEW IF EXISTS mv_ventas_diarias;
+CREATE MATERIALIZED VIEW mv_ventas_diarias AS
+SELECT fecha_dim_key, tienda_key, SUM(total) AS total_venta, SUM(cantidad) AS total_cantidad
+FROM fact_ventas
+GROUP BY fecha_dim_key, tienda_key
+WITH NO DATA;
+
+CREATE OR REPLACE FUNCTION refresh_fact_ventas() RETURNS VOID AS $$
+BEGIN
+
+    TRUNCATE TABLE fact_ventas;
+
+    INSERT INTO fact_ventas (fecha_dim_key, producto_key, cliente_key, tienda_key, cantidad, total, created_at)
+    SELECT
+      (date_trunc('day', v.fecha_hora)::date)::integer::bigint % 2147483647 AS fecha_dim_key,
+      dv.sku AS producto_key,
+      v.id_cliente AS cliente_key,
+      v.id_tienda AS tienda_key,
+      SUM(dv.cantidad) AS cantidad,
+      SUM(dv.subtotal) * 1.0 AS total,
+      now() AS created_at
+    FROM venta v
+    JOIN detalles_venta dv
+      ON v.id_venta = dv.id_venta
+    GROUP BY v.id_venta, dv.sku, v.id_cliente, v.id_tienda;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE INDEX IF NOT EXISTS idx_fact_ventas_created_at ON fact_ventas(created_at);
+
+
+-- RESPALDO Y RECUPERACIÓN + REPLICACIÓN FÍSICA 
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'replicator') THEN
+        CREATE ROLE replicator WITH REPLICATION LOGIN PASSWORD '<root>';
+    ELSE
+        -- Si ya existe, aseguramos atributos mínimos
+        ALTER ROLE replicator WITH REPLICATION LOGIN;
+        
+    END IF;
+END$$;
+
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO replicator;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_publication WHERE pubname = 'pub_sistema_ventas') THEN
+        CREATE PUBLICATION pub_sistema_ventas FOR TABLE
+            venta, detalles_venta, compra, compra_producto, facturacion, stock;
+    END IF;
+END$$;
+
+
+
+-- ======================================================================
+-- SCRIPT DE GENERACIÓN DE DATOS (pruebas realizadas por el modelo fisico, no parte del modelo)
+-- (COMENTAR O ELIMINAR ESTA SECCIÓN EN PRODUCCIÓN REAL, ES SOLO PARA PRUEBAS)
+-- ======================================================================
+
+-- DESACTIVAR RESTRICCIÓN DE STOCK NEGATIVO (Para asegurar que termine)
+-- Se recomienda revisar el trigger de resta de stock en ventas para producción real
+
+
+-- ESTO SOLO ES PARA PRUEBAS
+ALTER TABLE stock DROP CONSTRAINT IF EXISTS stock_cantidad_check;
+
+DO $$
+DECLARE
+    -- Configuraciones
+    v_cant_clientes INT := 5000;
+    v_cant_productos INT := 1000;
+    v_cant_ventas INT := 20000; 
+    v_cant_compras INT := 1000;
+BEGIN
+    RAISE NOTICE 'Iniciando generación de datos...';
+
+    -- CATÁLOGOS BASE
+    RAISE NOTICE 'Insertando catálogos...';
+    -- Usamos ON CONFLICT DO NOTHING para evitar errores si se corre sobre datos existentes
+    INSERT INTO sucursal (rfc, nombre, direccion, telefono, ciudad) VALUES 
+        ('MEM561201HG1', 'Sucursal Toluca Centro', 'Av. Morelos 100', '7221112233', 'Toluca'),
+        ('XEXX010101000', 'Sucursal Metepec', 'Pino Suárez 500', '7224445566', 'Metepec'),
+        ('XAXX010101000', 'Sucursal CDMX Norte', 'Reforma 222', '5551112222', 'CDMX')
+    ON CONFLICT DO NOTHING;
+
+    INSERT INTO categoria (nombre_categoria, descripcion)
+    SELECT 'Categoria ' || i, 'Descripción ' || i FROM generate_series(1, 10) i;
+
+    INSERT INTO puesto (nombre_puesto, salario) VALUES ('Cajero', 6000), ('Gerente', 15000), ('Bodeguero', 5000);
+
+    RAISE NOTICE 'Insertando personas...';
+    INSERT INTO proveedores (razon_social, rfc, telefono, email)
+    SELECT 'Proveedor ' || i, 'PRO' || LPAD(i::text, 10, '0'), '55' || LPAD(i::text, 8, '0'), 'prov' || i || '@mail.com'
+    FROM generate_series(1, 50) i;
+
+    INSERT INTO empleados (razon_social, rfc, telefono, email, nombre, apellido_paterno, id_tienda, id_puesto)
+    SELECT 'Empleado ' || i, 'EMP' || LPAD(i::text, 10, '0'), '72' || LPAD(i::text, 8, '0'), 'emp' || i || '@tienda.com',
+           'Nom' || i, 'Ape' || i, (SELECT id_tienda FROM sucursal ORDER BY RANDOM() LIMIT 1), (SELECT id_puesto FROM puesto ORDER BY RANDOM() LIMIT 1)
+    FROM generate_series(1, 50) i;
+
+    INSERT INTO clientes (razon_social, rfc, telefono, email)
+    SELECT 'Cliente ' || i, 'CLI' || LPAD(i::text, 9, '0') || 'X', '77' || LPAD(i::text, 8, '0'), 'cliente' || i || '@gmail.com'
+    FROM generate_series(1, v_cant_clientes) i;
+
+    RAISE NOTICE 'Insertando productos e inventario...';
+    INSERT INTO productos (nombre_producto, descripcion, condicion, id_categoria)
+    SELECT 'Producto SKU-' || i, 'Desc ' || i, CASE WHEN i % 2 = 0 THEN 'Nuevo' ELSE 'Usado' END, (SELECT id_categoria FROM categoria ORDER BY RANDOM() LIMIT 1)
+    FROM generate_series(1, v_cant_productos) i;
+
+    INSERT INTO inventario (id_tienda) SELECT id_tienda FROM sucursal ON CONFLICT DO NOTHING;
+
+    -- INTENTO DE STOCK MASIVO 
+    INSERT INTO stock (id_inventario, sku, cantidad)
+    SELECT inv.id_inventario, p.sku, 50000 
+    FROM inventario inv CROSS JOIN productos p
+    ON CONFLICT (id_inventario, sku) DO NOTHING;
+
+    RAISE NOTICE 'Generando compras...';
+    INSERT INTO compra (subtotal_compra, total_compra, fecha_compra, forma_pago, id_proveedor, id_tienda, recibida, aplicada)
+    SELECT 0, 0, 
+           '2025-01-01'::TIMESTAMPTZ + (RANDOM() * 360 || ' days')::INTERVAL, 
+           'Transferencia',
+           (SELECT id_proveedor FROM proveedores ORDER BY RANDOM() LIMIT 1),
+           (SELECT id_tienda FROM sucursal ORDER BY RANDOM() LIMIT 1), TRUE, TRUE
+    FROM generate_series(1, v_cant_compras) i;
+
+    INSERT INTO compra_producto (id_compra, fecha_compra, sku, cantidad, precio_unitario)
+    SELECT c.id_compra, c.fecha_compra, (SELECT sku FROM productos ORDER BY RANDOM() LIMIT 1),
+           (RANDOM() * 50 + 1)::INT, (RANDOM() * 500 + 10)::NUMERIC(12,2)
+    FROM compra c CROSS JOIN generate_series(1, 3);
+
+    RAISE NOTICE 'Generando ventas masivas...';
+    
+    INSERT INTO venta (fecha_hora, forma_pago, id_cliente, id_empleado, id_tienda)
+    SELECT 
+        CASE WHEN i % 2 = 0 THEN '2025-01-01'::TIMESTAMPTZ + (RANDOM() * 360 || ' days')::INTERVAL
+             ELSE '2026-01-01'::TIMESTAMPTZ + (RANDOM() * 360 || ' days')::INTERVAL END,
+        CASE WHEN (RANDOM() > 0.5) THEN 'Efectivo' ELSE 'Tarjeta' END,
+        (SELECT id_cliente FROM clientes ORDER BY RANDOM() LIMIT 1),
+        (SELECT id_empleado FROM empleados ORDER BY RANDOM() LIMIT 1),
+        (SELECT id_tienda FROM sucursal ORDER BY RANDOM() LIMIT 1)
+    FROM generate_series(1, v_cant_ventas) i;
+
+    INSERT INTO detalles_venta (id_venta, fecha_hora, sku, cantidad, precio_unitario, orden)
+    SELECT 
+        v.id_venta,
+        v.fecha_hora,
+        p.sku,
+        (RANDOM() * 5 + 1)::INT, 
+        (RANDOM() * 1000 + 50)::NUMERIC(12,2),
+        s.n 
+    FROM venta v
+    JOIN productos p ON p.sku = (SELECT sku FROM productos ORDER BY RANDOM() LIMIT 1)
+    CROSS JOIN generate_series(1, (RANDOM() * 3 + 1)::INT) AS s(n);
+
+    RAISE NOTICE 'Generando facturas...';
+    INSERT INTO facturacion (id_venta, fecha_emision, fecha_hora_venta, total, serie, folio, id_tienda, id_cliente)
+    SELECT v.id_venta, v.fecha_hora + interval '1 hour', v.fecha_hora, v.total_venta, 'F', v.id_venta::text, v.id_tienda, v.id_cliente
+    FROM venta v WHERE v.id_venta % 3 = 0;
+
+    RAISE NOTICE 'Generación de datos finalizada exitosamente.';
+END $$;
+
+
+-- ETL: POBLAR EL DATAMART
+
+RAISE NOTICE 'Poblando Datamart...';
+
+TRUNCATE TABLE fact_ventas, dm_dim_tiempo, dm_dim_producto, dm_dim_cliente, dm_dim_tienda, dm_dim_empleado RESTART IDENTITY;
+
+INSERT INTO dm_dim_tiempo (fecha, anio, mes, trimestre, dia_semana)
+SELECT DISTINCT date_trunc('day', fecha_hora)::date, 
+       EXTRACT(YEAR FROM fecha_hora), EXTRACT(MONTH FROM fecha_hora), 
+       EXTRACT(QUARTER FROM fecha_hora), TO_CHAR(fecha_hora, 'Day')
+FROM venta;
+
+INSERT INTO dm_dim_producto (producto_key, nombre_producto, id_categoria)
+SELECT sku, nombre_producto, id_categoria FROM productos;
+
+INSERT INTO dm_dim_cliente (cliente_key, razon_social, rfc, email)
+SELECT id_cliente, razon_social, rfc, email FROM clientes;
+
+INSERT INTO dm_dim_tienda (tienda_key, nombre, ciudad)
+SELECT id_tienda, nombre, ciudad FROM sucursal;
+
+INSERT INTO dm_dim_empleado (empleado_key, nombre_completo, id_tienda, id_puesto)
+SELECT id_empleado, nombre || ' ' || apellido_paterno, id_tienda, id_puesto FROM empleados;
+
+
+INSERT INTO fact_ventas (fecha_dim_key, producto_key, cliente_key, tienda_key, cantidad, total)
+SELECT 
+    TO_CHAR(v.fecha_hora, 'YYYYMMDD')::INTEGER, 
+    dv.sku, v.id_cliente, v.id_tienda,
+    SUM(dv.cantidad), SUM(dv.subtotal)
+FROM venta v
+JOIN detalles_venta dv ON v.id_venta = dv.id_venta
+GROUP BY TO_CHAR(v.fecha_hora, 'YYYYMMDD')::INTEGER, dv.sku, v.id_cliente, v.id_tienda;
+
+--  TERMINA SECCION DE ETL (PARA PRUEBAS, TODO ESTO SER ELIMINADO EN PRODUCCIÓN REAL)
+
+
+
+--  REPORTES OLAP (CUBE, ROLLUP)
+
+-- 1. ROLLUP
+SELECT t.nombre AS tienda, p.nombre_producto AS producto, SUM(fv.total) AS ventas_totales
+FROM fact_ventas fv
+JOIN dm_dim_tienda t ON fv.tienda_key = t.tienda_key
+JOIN dm_dim_producto p ON fv.producto_key = p.producto_key
+GROUP BY ROLLUP (t.nombre, p.nombre_producto)
+ORDER BY t.nombre, p.nombre_producto;
+
+-- 2. CUBE
+SELECT t.nombre AS tienda, c.razon_social AS cliente, SUM(fv.cantidad) AS cantidad_productos, SUM(fv.total) AS ingreso_total
+FROM fact_ventas fv
+JOIN dm_dim_tienda t ON fv.tienda_key = t.tienda_key
+JOIN dm_dim_cliente c ON fv.cliente_key = c.cliente_key
+GROUP BY CUBE (t.nombre, c.razon_social)
+ORDER BY t.nombre, c.razon_social;
+
+-- 3. RANK
+SELECT p.nombre_producto, SUM(fv.total) AS total_vendido,
+    RANK() OVER (ORDER BY SUM(fv.total) DESC) as ranking_gap,
+    DENSE_RANK() OVER (ORDER BY SUM(fv.total) DESC) as ranking_denso
+FROM fact_ventas fv
+JOIN dm_dim_producto p ON fv.producto_key = p.producto_key
+GROUP BY p.nombre_producto
+LIMIT 10;
+
+-- REQUERIMIENTO 2.3: XML
+
+CREATE OR REPLACE VIEW vw_reporte_ventas_xml AS
+SELECT XMLELEMENT(NAME "ReporteVentas",
+        XMLAGG(XMLELEMENT(NAME "Venta",
+                XMLATTRIBUTES(v.id_venta AS "id"),
+                XMLELEMENT(NAME "Fecha", v.fecha_hora),
+                XMLELEMENT(NAME "Total", v.total_venta)
+            ))) AS documento_xml
+FROM venta v
+WHERE v.fecha_hora >= '2025-01-01'::date
+LIMIT 10;
 
 -- Fin del archivo
