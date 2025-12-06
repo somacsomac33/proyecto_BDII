@@ -1,4 +1,4 @@
-# Primera Entrega — Evaluación Práctica (Bases de Datos II)
+# Segunda Entrega — Evaluación Práctica (Bases de Datos II)
 
 ![Imagen de WhatsApp 2025-10-11 a las 01 41 40_b6cd2bf1](https://github.com/user-attachments/assets/1207e249-903d-4e4d-8581-bf1b2b45937d)
 
