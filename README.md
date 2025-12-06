@@ -49,31 +49,6 @@ psql -U postgres -d sistema_ventas -c "SELECT generar_stock_masivo();"
 psql -U postgres -d sistema_ventas -c "CALL generar_ventas_masivas(1000);"
 ```
 
-Instrucciones mínimas para subir a GitHub
-1. Inicializar repositorio git y hacer commit:
-
-```
-cd "<RUTA_DEL_PROYECTO>"  -- Reemplaza con la ruta local de tu repositorio
-git init
-git add .
-git commit -m "Add database script and README"
-git branch -M main
-```
-
-2. Crear el repositorio remoto en GitHub (desde la web) y conectar:
-
-```
-git remote add origin https://github.com/<TU_USUARIO>/<TU_REPO>.git
-git push -u origin main
-```
-
-Notas finales
-- Revisa el script antes de ejecutarlo en entornos productivos.
-- Si quieres que prepare un `Dockerfile` + `docker-compose` para levantar un contenedor PostgreSQL y ejecutar el script de manera reproducible, dímelo y lo añado.
-
-Contacto
-- Si quieres que refine el README, añadir ejemplos de consultas o fragmentos de ERD, indícamelo y lo preparo.
-
 =====================================
 Documentación detallada por sección
 =====================================
