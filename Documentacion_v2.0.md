@@ -1,6 +1,6 @@
 # Sistema de Ventas - Modelo de Base de Datos
 
-## 📋 Descripción General
+##  Descripción General
 
 Modelo de base de datos PostgreSQL para un sistema de ventas completo que incluye:
 - **Modelo transaccional** con particionamiento por tiempo
@@ -13,7 +13,7 @@ Modelo de base de datos PostgreSQL para un sistema de ventas completo que incluy
 
 ---
 
-## 🗃️ Esquema de Base de Datos
+##  Esquema de Base de Datos
 
 ### 1. Tablas de Catálogo (Independientes)
 
