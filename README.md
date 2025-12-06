@@ -28,7 +28,7 @@ Cómo ejecutar el script (Windows `cmd.exe`)
 2. Navegar a la carpeta que contiene el archivo, por ejemplo:
 
 ```
-cd "C:\Users\vegas\OneDrive\Desktop\Documentacion_querys"
+cd "<RUTA_DEL_PROYECTO>"  -- Reemplaza con la ruta local de tu repositorio
 ```
 
 3. Ejecutar con `psql` (ajusta el usuario y host según tu entorno):
@@ -53,7 +53,7 @@ Instrucciones mínimas para subir a GitHub
 1. Inicializar repositorio git y hacer commit:
 
 ```
-cd "C:\Users\vegas\OneDrive\Desktop\Documentacion_querys"
+cd "<RUTA_DEL_PROYECTO>"  -- Reemplaza con la ruta local de tu repositorio
 git init
 git add .
 git commit -m "Add database script and README"
@@ -161,6 +161,4 @@ Partes adicionales dentro del script
 Consejos operativos rápidos
 - Revisión previa: Antes de ejecutar en un entorno real, leer y comentar (o eliminar) secciones de población masiva y `DROP DATABASE` si no deseas recrear DB.
 - Deshabilitar triggers: Para imports masivos en tablas particionadas, considera deshabilitar triggers y funciones que actualicen agregados, y luego recalcular.
-- Particiones: Añade particiones cronológicamente (ej. `venta_2027`) para evitar errores en inserciones futuras.
-
----
+- Particiones: Añade particiones cronológicamente (ej. `venta_2027`) para evitar er
