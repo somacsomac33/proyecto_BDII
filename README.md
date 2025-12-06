@@ -1,4 +1,4 @@
-# Sistema de Ventas - Script SQL
+# Querys y Resultados 
 
 Descripción
 - **Propósito:** Script SQL completo que crea el modelo físico de una base de datos de ventas (PostgreSQL). Incluye tablas, particionamiento, índices, funciones, triggers, procedimientos y scripts de población masiva.
